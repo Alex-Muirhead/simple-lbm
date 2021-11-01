@@ -1,0 +1,8 @@
+# Ignore all binary files (+all, -*.*, -*/)
+**/bin
+
+# Ignore configuration settings
+**/.vscode
+
+# Ignore data files
+*.h5
