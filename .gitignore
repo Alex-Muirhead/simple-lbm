@@ -1,5 +1,8 @@
-# Ignore all binary files (+all, -*.*, -*/)
+# Ignore all binary files
 **/bin
+
+# Ingore object files
+**/*.o
 
 # Ignore configuration settings
 **/.vscode
