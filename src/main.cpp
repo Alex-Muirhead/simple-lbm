@@ -84,11 +84,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    double r = 6.4;  // Temporary value
-
-    double u = 0.04;
-    double Re = 220.0;
-    double nu_lb = u * r / Re;                // Dynamic viscosity
+    double nu_lb = 0.092;                // Lattice dynamic viscosity
     double omega = 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
 
     // HACKING IN VALUES
