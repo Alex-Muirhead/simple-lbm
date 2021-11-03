@@ -5,7 +5,7 @@
 #include "hdf5.h"
 #include "hdfio.h"
 #include "lbm.h"
-
+#include "index.h"
 using namespace std;
 
 class Field {
