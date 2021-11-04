@@ -14,7 +14,8 @@ your local machine for development and testing purposes.
 - HDF5 Library. *Note: On the UQ `goliath` and `getafix` clusters, this
    library can be loaded in with*
 ```bash
-module load hdf5
+module load hdf5-serial
+module load cuda
 ```
 
 ### Building
@@ -27,13 +28,14 @@ it must be manually included in the [makefile](./Makefile).
 HDF5HOME ?= /home/alex/hdf5
 ```
 
-Once the library is specified, the code can be built with `make`.
+Once the library is specified, the code can be built with `make cpu` or `make gpu`.
 
 ### Example
 
 Once built, the file can be called with
 ```bash
-./bin/main 100
+./bin/main "taylor_green.h5"
+./bin/main_gpu "taylor_green.h5"
 ```
 
 ## Authors

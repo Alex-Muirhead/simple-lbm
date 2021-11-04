@@ -35,7 +35,7 @@ INCLUDE	:= include $(HDF5HOME)/include
 LIB		:= $(HDF5HOME)/lib
 
 ifeq ($(OS),Windows_NT)
-MAIN_CPU	:= main.exe
+MAIN_CPU	:= main_cpu.exe
 MAIN_GPU	:= main_gpu.exe
 SOURCEDIRS	:= $(SRC)
 INCLUDEDIRS	:= $(INCLUDE)
@@ -44,7 +44,7 @@ FIXPATH = $(subst /,\,$1)
 RM			:= del /q /f
 MD	:= mkdir
 else
-MAIN_CPU	:= main
+MAIN_CPU	:= main_cpu
 MAIN_GPU	:= main_gpu
 SOURCEDIRS	:= $(shell find $(SRC) -type d)
 INCLUDEDIRS	:= $(shell find $(INCLUDE) -type d)
@@ -68,7 +68,7 @@ OBJECTS		:= $(SOURCES:.cpp=.o)
 OBJECTS		:= $(OBJECTS:.cu=.o)
 
 OBJECTS_CPU := $(filter-out src/main_gpu.o, $(OBJECTS))
-OBJECTS_GPU := $(filter-out src/main.o, $(OBJECTS))
+OBJECTS_GPU := $(filter-out src/main_cpu.o, $(OBJECTS))
 
 #
 # The following part of the makefile is generic; it can be used to
