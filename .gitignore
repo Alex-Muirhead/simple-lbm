@@ -7,8 +7,5 @@
 # Ignore configuration settings
 **/.vscode
 
-# Ignore data files
-*.h5
-
 # Ignore Jupyter notebook misc.
 **/.ipynb_checkpoints
