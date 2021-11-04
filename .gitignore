@@ -9,3 +9,6 @@
 
 # Ignore data files
 *.h5
+
+# Ignore Jupyter notebook misc.
+**/.ipynb_checkpoints
