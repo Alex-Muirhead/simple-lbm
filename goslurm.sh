@@ -25,4 +25,5 @@ if [ ! -f bin/main_gpu ] ; then
    exit 2
 fi
 
+time ./bin/main_cpu "taylor_green.h5"
 time ./bin/main_gpu "taylor_green.h5"
