@@ -3,7 +3,6 @@
 #include <sstream>
 
 #include "constants.h"
-#include "hdf5.h"
 #include "hdfio.h"
 #include "index.h"
 
@@ -101,6 +100,33 @@ void stream(double* f_src, double* f_dst, int* phase) {
     }
 }
 
+void calculate_macros(double* f, double* rho, double* vel_x, double* vel_y) {
+    for (unsigned int y = 0; y < size_y; y++) {
+        for (unsigned int x = 0; x < size_x; x++) {
+            // -- Calculate macroscopic properties --
+
+            double r = 0.0;  // Density
+            double u = 0.0;  // Velocity x
+            double v = 0.0;  // Velocity y
+
+            for (int q = 0; q < Q; q++) {
+                double dist = f[Field::index(x, y, q)];
+
+                r += dist;            // 0th order moment
+                u += c[q][0] * dist;  // 1st order moment
+                v += c[q][1] * dist;  // ^^^
+            }
+            // Velocity = Momentum / Density
+            u /= r;
+            v /= r;
+
+            rho  [Scalar::index(x, y)] = r;
+            vel_x[Scalar::index(x, y)] = u;
+            vel_y[Scalar::index(x, y)] = v;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     int val;
     if (argc >= 2) {
@@ -169,6 +195,8 @@ int main(int argc, char* argv[]) {
     OutputData output;
     output = OutputData::create("output.h5");
     output.write_scalar("density", rho);
+    output.write_scalar("vel_x", vel_x);
+    output.write_scalar("vel_y", vel_y);
 
     for (int t = 0; t < val; t++) {
         // Collision step
@@ -180,7 +208,10 @@ int main(int argc, char* argv[]) {
         // Decide when to save / export the data
         if ((t + 1) % f_save == 0) {
             printf("Saving data from timestep %d\n", t + 1);
+            calculate_macros(f2, rho, vel_x, vel_y);
             output.append_scalar("density", rho);
+            output.append_scalar("vel_x", vel_x);
+            output.append_scalar("vel_y", vel_y);
         }
 
         // Swap lattices to repeat process
@@ -189,7 +220,6 @@ int main(int argc, char* argv[]) {
         f2 = temp;
     }
 
-    mat2hdf5(f1, size_x, size_y);
     output.close();
 
     delete vel_x;
