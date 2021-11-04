@@ -223,31 +223,27 @@ void calculate_flow_properties(double* f, double* rho, double* vel_x, double* ve
 }
 
 int main(int argc, char* argv[]) {
-    int val;
-    if (argc >= 2) {
-        std::istringstream iss(argv[1]);
-
-        if (iss >> val) {
-            // Conversion successful
-        }
+    if (argc < 2) {
+        cerr << "Expected filename" << endl;
+        return -1;
     }
 
     double nu_lb = 0.092;                     // Lattice dynamic viscosity
     double omega = 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
 
-    InputData input = InputData::open("taylor_green.h5");
+    InputData config = InputData::open(argv[1]);
 
-    Field::set_field_shape(128, 128, Q);
-    Scalar::set_scalar_shape(128, 128);
+    Field::set_field_shape(config.shape_x, config.shape_y, Q);
+    Scalar::set_scalar_shape(config.shape_x, config.shape_y);
 
-    size_x = 128;
-    size_y = 128;
+    size_x = config.shape_x;
+    size_y = config.shape_y;
 
     set_gpu_size<<<1, 1>>>(size_x, size_y);
 
     int* type_lattice = new int[Scalar::size];
 
-    input.configure_domain(type_lattice);
+    config.configure_domain(type_lattice);
 
     double* rho   = new double[Scalar::size];
     double* vel_x = new double[Scalar::size];
@@ -261,15 +257,15 @@ int main(int argc, char* argv[]) {
     checkError(cudaMalloc((void**)&vel_x_gpu, Scalar::size*sizeof(double)));
     checkError(cudaMalloc((void**)&vel_y_gpu, Scalar::size*sizeof(double)));
 
-    input.read_scalar("initial/density", rho);
-    input.read_scalar("initial/vel_x", vel_x);
-    input.read_scalar("initial/vel_y", vel_y);
+    config.read_scalar("initial/density", rho);
+    config.read_scalar("initial/vel_x", vel_x);
+    config.read_scalar("initial/vel_y", vel_y);
 
     checkError(cudaMemcpy(  rho_gpu,   rho, Scalar::size*sizeof(double), cudaMemcpyHostToDevice));
     checkError(cudaMemcpy(vel_x_gpu, vel_x, Scalar::size*sizeof(double), cudaMemcpyHostToDevice));
     checkError(cudaMemcpy(vel_y_gpu, vel_y, Scalar::size*sizeof(double), cudaMemcpyHostToDevice));
 
-    input.close();
+    config.close();
 
     double* f1_gpu;
     double* f2_gpu;
@@ -280,15 +276,13 @@ int main(int argc, char* argv[]) {
     // Set up equilibrium values for initial flow
     init_eq(f1_gpu, rho_gpu, vel_x_gpu, vel_y_gpu);
 
-    unsigned int f_save = 100;
-
     OutputData output;
     output = OutputData::create("output.h5");
     output.write_scalar("density", rho);
     output.write_scalar("vel_x", vel_x);
     output.write_scalar("vel_y", vel_y);
 
-    for (int t = 0; t < val; t++) {
+    for (int t = 0; t < config.timesteps; t++) {
         // Collision step
         collide(f1_gpu, omega);
 
@@ -296,7 +290,7 @@ int main(int argc, char* argv[]) {
         stream(f1_gpu, f2_gpu);
 
         // Decide when to save / export the data
-        if ((t + 1) % f_save == 0) {
+        if ((t + 1) % config.savestep == 0) {
             printf("Saving data from timestep %d\n", t + 1);
             calculate_flow_properties(f2_gpu, rho_gpu, vel_x_gpu, vel_y_gpu);
             checkError(cudaMemcpy(  rho,   rho_gpu, Scalar::size*sizeof(double), cudaMemcpyDeviceToHost));

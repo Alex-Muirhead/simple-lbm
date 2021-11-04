@@ -39,8 +39,6 @@ InputData::InputData(hid_t file) {
     CHECK_STATUS(status)
     H5Aclose(attribute);
 
-    printf("Loaded size_x=%d\n", shape_x);
-
     attribute = H5Aopen_by_name(
         file,
         "layout",
@@ -52,7 +50,27 @@ InputData::InputData(hid_t file) {
     CHECK_STATUS(status)
     H5Aclose(attribute);
 
-    printf("Loaded size_y=%d\n", shape_y);
+    attribute = H5Aopen_by_name(
+        file,
+        "layout",
+        "timesteps",
+        H5P_DEFAULT,
+        H5P_DEFAULT);
+
+    status = H5Aread(attribute, H5T_NATIVE_INT, &timesteps);
+    CHECK_STATUS(status)
+    H5Aclose(attribute);
+
+    attribute = H5Aopen_by_name(
+        file,
+        "layout",
+        "savestep",
+        H5P_DEFAULT,
+        H5P_DEFAULT);
+
+    status = H5Aread(attribute, H5T_NATIVE_INT, &savestep);
+    CHECK_STATUS(status)
+    H5Aclose(attribute);
 }
 
 InputData InputData::open(const char *filename) {

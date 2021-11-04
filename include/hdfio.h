@@ -13,6 +13,8 @@ class InputData {
     hid_t file;
     unsigned int shape_x;
     unsigned int shape_y;
+    unsigned int timesteps;
+    unsigned int savestep;
 
     InputData(hid_t file);
     static InputData open(const char *filename);
