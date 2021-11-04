@@ -8,14 +8,6 @@
 
 using namespace std;
 
-/*
- * Ensures a positive value from modulo
- * Function taken from https://stackoverflow.com/a/23214219
- */
-inline int mod(int k, int n) {
-    return ((k %= n) < 0) ? k + n : k;
-}
-
 enum PointType : int {
     Fluid = 1 << 0,   // Standard streaming
     NoSlip = 1 << 1,  // Bounce-back boundary
