@@ -26,6 +26,32 @@ enum PointType : int {
 static unsigned int size_x;
 static unsigned int size_y;
 
+void init_eq(double* f, int* phase, double* rho, double* vel_x, double* vel_y) {
+    for (unsigned int y = 0; y < size_y; y++) {
+        for (unsigned int x = 0; x < size_x; x++) {
+            if (phase[Scalar::index(x, y)] != PointType::Fluid) {
+                // Set boundary lattice at zero
+                for (int q = 0; q < Q; q++) {
+                    f[Field::index(x, y, q)] = 1.0;  // Initial density
+                }
+                continue;
+            }
+
+            double u = vel_x[Scalar::index(x, y)];
+            double v = vel_y[Scalar::index(x, y)];
+            double r = rho[Scalar::index(x, y)];
+
+            // Initialise equilibrium
+            double vel_sqr = u * u + v * v;
+
+            for (int q = 0; q < Q; q++) {
+                double vel_dot = u * c[q][0] + v * c[q][1];
+                f[Field::index(x, y, q)] = weights[q] * r * (1. + 3.0 * vel_dot - 1.5 * vel_sqr + 4.5 * vel_dot * vel_dot);
+            }
+        }
+    }
+}
+
 void collide(double* f, double omega) {
     // Loop over the lattice dimensions
     for (unsigned int y = 0; y < size_y; y++) {
@@ -100,7 +126,7 @@ void stream(double* f_src, double* f_dst, int* phase) {
     }
 }
 
-void calculate_macros(double* f, double* rho, double* vel_x, double* vel_y) {
+void calculate_flow_properties(double* f, double* rho, double* vel_x, double* vel_y) {
     for (unsigned int y = 0; y < size_y; y++) {
         for (unsigned int x = 0; x < size_x; x++) {
             // -- Calculate macroscopic properties --
@@ -166,29 +192,7 @@ int main(int argc, char* argv[]) {
     double* f2 = new double[Field::size];
 
     // Set up equilibrium values for initial flow
-    for (unsigned int y = 0; y < size_y; y++) {
-        for (unsigned int x = 0; x < size_x; x++) {
-            if (type_lattice[Scalar::index(x, y)] != PointType::Fluid) {
-                // Set boundary lattice at zero
-                for (int q = 0; q < Q; q++) {
-                    f1[Field::index(x, y, q)] = 1.0;  // Initial density
-                }
-                continue;
-            }
-
-            double u = vel_x[Scalar::index(x, y)];
-            double v = vel_y[Scalar::index(x, y)];
-            double r = rho[Scalar::index(x, y)];
-
-            // Initialise equilibrium
-            double vel_sqr = u * u + v * v;
-
-            for (int q = 0; q < Q; q++) {
-                double vel_dot = u * c[q][0] + v * c[q][1];
-                f1[Field::index(x, y, q)] = weights[q] * r * (1. + 3.0 * vel_dot - 1.5 * vel_sqr + 4.5 * vel_dot * vel_dot);
-            }
-        }
-    }
+    init_eq(f1, type_lattice, rho, vel_x, vel_y);
 
     unsigned int f_save = 100;
 
@@ -208,7 +212,7 @@ int main(int argc, char* argv[]) {
         // Decide when to save / export the data
         if ((t + 1) % f_save == 0) {
             printf("Saving data from timestep %d\n", t + 1);
-            calculate_macros(f2, rho, vel_x, vel_y);
+            calculate_flow_properties(f2, rho, vel_x, vel_y);
             output.append_scalar("density", rho);
             output.append_scalar("vel_x", vel_x);
             output.append_scalar("vel_y", vel_y);
