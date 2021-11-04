@@ -7,10 +7,12 @@
 HDF5HOME ?= /home/alex/hdf5
 
 # define the Cpp compiler to use
-CXX = g++
+CXX  ?= g++
+NVCC ?= nvcc
 
 # define any compile-time flags
 CXXFLAGS	:= -std=c++11 -Wall -Wextra -O3
+NVFLAGS     := -O3 --gpu-architecture=sm_35 -Wno-deprecated-gpu-targets
 
 # define library paths in addition to /usr/lib
 #   if I wanted to include libraries not in /usr/lib I'd specify
@@ -33,7 +35,8 @@ INCLUDE	:= include $(HDF5HOME)/include
 LIB		:= $(HDF5HOME)/lib
 
 ifeq ($(OS),Windows_NT)
-MAIN	:= main.exe
+MAIN_CPU	:= main.exe
+MAIN_GPU	:= main_gpu.exe
 SOURCEDIRS	:= $(SRC)
 INCLUDEDIRS	:= $(INCLUDE)
 LIBDIRS		:= $(LIB)
@@ -41,7 +44,8 @@ FIXPATH = $(subst /,\,$1)
 RM			:= del /q /f
 MD	:= mkdir
 else
-MAIN	:= main
+MAIN_CPU	:= main
+MAIN_GPU	:= main_gpu
 SOURCEDIRS	:= $(shell find $(SRC) -type d)
 INCLUDEDIRS	:= $(shell find $(INCLUDE) -type d)
 LIBDIRS		:= $(shell find $(LIB) -type d)
@@ -57,10 +61,14 @@ INCLUDES	:= $(patsubst %,-I%, $(INCLUDEDIRS:%/=%))
 LIBS		:= $(patsubst %,-L%, $(LIBDIRS:%/=%))
 
 # define the C source files
-SOURCES		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS)))
+SOURCES		:= $(wildcard $(patsubst %,%/*.c*, $(SOURCEDIRS)))
 
 # define the C object files
 OBJECTS		:= $(SOURCES:.cpp=.o)
+OBJECTS		:= $(OBJECTS:.cu=.o)
+
+OBJECTS_CPU := $(filter-out src/main_gpu.o, $(OBJECTS))
+OBJECTS_GPU := $(filter-out src/main.o, $(OBJECTS))
 
 #
 # The following part of the makefile is generic; it can be used to
@@ -68,23 +76,33 @@ OBJECTS		:= $(SOURCES:.cpp=.o)
 # deleting dependencies appended to the file from 'make depend'
 #
 
-OUTPUTMAIN	:= $(call FIXPATH,$(OUTPUT)/$(MAIN))
+OUTPUTMAIN_CPU	:= $(call FIXPATH,$(OUTPUT)/$(MAIN_CPU))
+OUTPUTMAIN_GPU	:= $(call FIXPATH,$(OUTPUT)/$(MAIN_GPU))
 
-all: $(OUTPUT) $(MAIN)
+all: $(OUTPUT) $(MAIN_CPU)
 	@echo Executing 'all' complete!
+
+gpu: $(OUTPUT) $(MAIN_GPU)
+	@echo Executing 'gpu' complete!
 
 $(OUTPUT):
 	$(MD) $(OUTPUT)
 
-$(MAIN): $(OBJECTS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $(OUTPUTMAIN) $(OBJECTS) $(LFLAGS) $(LIBS)
+$(MAIN_CPU): $(OBJECTS_CPU)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $(OUTPUTMAIN_CPU) $(OBJECTS_CPU) $(LFLAGS) $(LIBS)
+
+$(MAIN_GPU): $(OBJECTS_GPU)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) -o $(OUTPUTMAIN_GPU) $(OBJECTS_GPU) $(LFLAGS) $(LIBS)
 
 # this is a suffix replacement rule for building .o's from .c's
 # it uses automatic variables $<: the name of the prerequisite of
 # the rule(a .c file) and $@: the name of the target of the rule (a .o file)
 # (see the gnu make manual section about automatic variables)
 .cpp.o:
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<  -o $@
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+src/main_gpu.o:
+	$(NVCC) $(NVFLAGS) $(INCLUDES) -c src/main_gpu.cu -o $@
 
 .PHONY: clean
 clean:
