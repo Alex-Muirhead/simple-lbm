@@ -79,7 +79,10 @@ OBJECTS_GPU := $(filter-out src/main.o, $(OBJECTS))
 OUTPUTMAIN_CPU	:= $(call FIXPATH,$(OUTPUT)/$(MAIN_CPU))
 OUTPUTMAIN_GPU	:= $(call FIXPATH,$(OUTPUT)/$(MAIN_GPU))
 
-all: $(OUTPUT) $(MAIN_CPU)
+all: $(OUTPUT) $(MAIN_CPU) $(MAIN_GPU)
+	@echo Executing 'all' complete!
+
+cpu: $(OUTPUT) $(MAIN_CPU)
 	@echo Executing 'all' complete!
 
 gpu: $(OUTPUT) $(MAIN_GPU)
@@ -108,7 +111,3 @@ src/main_gpu.o:
 clean:
 	$(RM) $(call FIXPATH,$(OBJECTS))
 	@echo Cleanup complete!
-
-run: all
-	./$(OUTPUTMAIN)
-	@echo Executing 'run: all' complete!
