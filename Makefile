@@ -3,6 +3,9 @@
 # 'make clean'  removes all .o and executable files
 #
 
+# if not already defined, set the HDF5 Home
+HDF5HOME ?= /home/alex/hdf5
+
 # define the Cpp compiler to use
 CXX = g++
 
@@ -24,10 +27,10 @@ BUILD   := build
 SRC		:= src
 
 # define include directory
-INCLUDE	:= include /home/alex/hdf5/include
+INCLUDE	:= include $(HDF5HOME)/include
 
 # define lib directory
-LIB		:= /home/alex/hdf5/lib
+LIB		:= $(HDF5HOME)/lib
 
 ifeq ($(OS),Windows_NT)
 MAIN	:= main.exe
