@@ -9,3 +9,4 @@
 
 # Ignore Jupyter notebook misc.
 **/.ipynb_checkpoints
+**/notebooks
