@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
@@ -182,9 +183,16 @@ int main(int argc, char* argv[]) {
 
     OutputData output;
     output = OutputData::create("output.h5");
+
+    auto saveTime = chrono::microseconds::zero();
+    auto startSave = chrono::high_resolution_clock::now();
     output.write_scalar("density", rho);
     output.write_scalar("vel_x", vel_x);
     output.write_scalar("vel_y", vel_y);
+    auto endSave = chrono::high_resolution_clock::now();
+    saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
+
+    auto start = chrono::high_resolution_clock::now();
 
     for (unsigned int t = 0; t < config.timesteps; t++) {
         // Collision step
@@ -194,12 +202,15 @@ int main(int argc, char* argv[]) {
         stream(f1, f2, type_lattice);
 
         // Decide when to save / export the data
-        if ((t + 1) % config.savestep == 0) {
+        if ((config.savestep > 0) && ((t + 1) % config.savestep == 0)) {
             printf("Saving data from timestep %d\n", t + 1);
             calculate_flow_properties(f2, rho, vel_x, vel_y);
+            auto startSave = chrono::high_resolution_clock::now();
             output.append_scalar("density", rho);
             output.append_scalar("vel_x", vel_x);
             output.append_scalar("vel_y", vel_y);
+            auto endSave = chrono::high_resolution_clock::now();
+            saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
         }
 
         // Swap lattices to repeat process
@@ -207,6 +218,29 @@ int main(int argc, char* argv[]) {
         f1 = f2;
         f2 = temp;
     }
+
+    auto end = chrono::high_resolution_clock::now();
+    double runtime = chrono::duration_cast<chrono::milliseconds> (end - start).count() / 1000.0;
+
+    size_t nodes_updated = config.timesteps * size_t(size_x * size_y);
+    size_t nodes_saved   = config.timesteps / config.savestep * size_t(size_x * size_y);
+    // calculate speed in million lattice updates per second
+    double speed = nodes_updated / (1E+06 * runtime);
+    // calculate memory access rate in GiB/s
+    double bytesPerGiB = 1024.0 * 1024.0 * 1024.0;
+    double bandwidth = (
+        nodes_updated * Q * 2  // Both read AND write
+        + nodes_saved * 3      // 3 components (rho and velx/vely)
+    ) * sizeof(double) / (runtime * bytesPerGiB);
+
+    printf(" ----- performance information -----\n");
+    printf("        timesteps: %u\n", config.timesteps);
+    printf("    clock runtime: %.3f (s)\n", runtime);
+    printf("      output time: %.3f (ms)\n", saveTime.count() / 1000.0);
+    printf("            speed: %.2f (Mlups)\n", speed);
+    printf("        bandwidth: %.1f (GiB/s)\n", bandwidth);
+
+    // Close resources
 
     config.close();
     output.close();

@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
@@ -222,11 +223,41 @@ void calculate_flow_properties(double* f, double* rho, double* vel_x, double* ve
     properties_kernel<<<grid, threads>>>(f, rho, vel_x, vel_y);
 }
 
+void DisplayHeader()
+{
+    const int kb = 1024;
+    const int mb = kb * kb;
+    cout << "\nCUDA version:   v" << CUDART_VERSION << endl;
+
+    int devCount;
+    cudaGetDeviceCount(&devCount);
+    cout << "CUDA Devices: " << endl << endl;
+
+    for(int i = 0; i < devCount; ++i)
+    {
+        cudaDeviceProp props;
+        cudaGetDeviceProperties(&props, i);
+        cout << i << ": " << props.name << ": " << props.major << "." << props.minor << endl;
+        cout << "  Global memory:   " << props.totalGlobalMem / mb << "mb" << endl;
+        cout << "  Shared memory:   " << props.sharedMemPerBlock / kb << "kb" << endl;
+        cout << "  Constant memory: " << props.totalConstMem / kb << "kb" << endl;
+        cout << "  Block registers: " << props.regsPerBlock << endl << endl;
+
+        cout << "  Warp size:         " << props.warpSize << endl;
+        cout << "  Threads per block: " << props.maxThreadsPerBlock << endl;
+        cout << "  Max block dimensions: [ " << props.maxThreadsDim[0] << ", " << props.maxThreadsDim[1]  << ", " << props.maxThreadsDim[2] << " ]" << endl;
+        cout << "  Max grid dimensions:  [ " << props.maxGridSize[0] << ", " << props.maxGridSize[1]  << ", " << props.maxGridSize[2] << " ]" << endl;
+        cout << endl;
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cerr << "Expected filename" << endl;
         return -1;
     }
+
+    DisplayHeader();
 
     double nu_lb = 0.092;                     // Lattice dynamic viscosity
     double omega = 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
@@ -253,6 +284,10 @@ int main(int argc, char* argv[]) {
     double* vel_x_gpu;
     double* vel_y_gpu;
 
+    cudaEvent_t begin, end;
+    checkError(cudaEventCreate(&begin));
+    checkError(cudaEventCreate(&end));
+
     checkError(cudaMalloc((void**)&rho_gpu,   Scalar::size*sizeof(double)));
     checkError(cudaMalloc((void**)&vel_x_gpu, Scalar::size*sizeof(double)));
     checkError(cudaMalloc((void**)&vel_y_gpu, Scalar::size*sizeof(double)));
@@ -278,9 +313,17 @@ int main(int argc, char* argv[]) {
 
     OutputData output;
     output = OutputData::create("output.h5");
+
+    auto saveTime = chrono::microseconds::zero();
+    auto startSave = chrono::high_resolution_clock::now();
     output.write_scalar("density", rho);
     output.write_scalar("vel_x", vel_x);
     output.write_scalar("vel_y", vel_y);
+    auto endSave = chrono::high_resolution_clock::now();
+    saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
+
+    auto start = chrono::high_resolution_clock::now();
+    checkError(cudaEventRecord(begin, 0));
 
     for (int t = 0; t < config.timesteps; t++) {
         // Collision step
@@ -290,15 +333,18 @@ int main(int argc, char* argv[]) {
         stream(f1_gpu, f2_gpu);
 
         // Decide when to save / export the data
-        if ((t + 1) % config.savestep == 0) {
+        if ((config.savestep > 0) && ((t + 1) % config.savestep == 0)) {
             printf("Saving data from timestep %d\n", t + 1);
             calculate_flow_properties(f2_gpu, rho_gpu, vel_x_gpu, vel_y_gpu);
+            auto startSave = chrono::high_resolution_clock::now();
             checkError(cudaMemcpy(  rho,   rho_gpu, Scalar::size*sizeof(double), cudaMemcpyDeviceToHost));
             checkError(cudaMemcpy(vel_x, vel_x_gpu, Scalar::size*sizeof(double), cudaMemcpyDeviceToHost));
             checkError(cudaMemcpy(vel_y, vel_y_gpu, Scalar::size*sizeof(double), cudaMemcpyDeviceToHost));
             output.append_scalar("density", rho);
             output.append_scalar("vel_x", vel_x);
             output.append_scalar("vel_y", vel_y);
+            auto endSave = chrono::high_resolution_clock::now();
+            saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
         }
 
         // Swap lattices to repeat process
@@ -307,11 +353,45 @@ int main(int argc, char* argv[]) {
         f2_gpu = temp;
     }
 
+    checkError(cudaEventRecord(end, 0));
+    checkError(cudaEventSynchronize(end));
+    float gpu_milliseconds = 0.0f;
+    checkError(cudaEventElapsedTime(&gpu_milliseconds, begin, end));
+
+    auto stop = chrono::high_resolution_clock::now();
+    double runtime = chrono::duration_cast<chrono::milliseconds> (stop - start).count() / 1000.0;
+    double gpu_runtime = 0.001*gpu_milliseconds;
+
+    size_t nodes_updated = config.timesteps * size_t(size_x * size_y);
+    size_t nodes_saved   = config.timesteps / config.savestep * size_t(size_x * size_y);
+
+    // calculate speed in million lattice updates per second
+    double speed = nodes_updated / (1E+06 * runtime);
+    // calculate memory access rate in GiB/s
+    double bytesPerGiB = 1024.0 * 1024.0 * 1024.0;
+    double bandwidth = (
+        nodes_updated * Q * 2
+        + nodes_saved * 3
+    ) * sizeof(double) / (runtime * bytesPerGiB);
+
+    printf(" ----- performance information -----\n");
+    printf("        timesteps: %u\n", config.timesteps);
+    printf("    clock runtime: %.3f (s)\n", runtime);
+    printf("      gpu runtime: %.3f (s)\n", gpu_runtime);
+    printf("      output time: %.3f (ms)\n", saveTime.count() / 1000.0);
+    printf("            speed: %.2f (Mlups)\n",speed);
+    printf("        bandwidth: %.1f (GiB/s)\n",bandwidth);
+
+    // Close resources
+
     output.close();
 
     delete rho;
     delete vel_x;
     delete vel_y;
+
+    checkError(cudaEventDestroy(begin));
+    checkError(cudaEventDestroy(end));
 
     checkError(cudaFree(rho_gpu));
     checkError(cudaFree(vel_x_gpu));
