@@ -23,10 +23,10 @@ if [ ! -f bin/main_gpu ] ; then
    exit 2
 fi
 
-# > $CURRENT_DIR/cpu_performance.txt
-# for i in {0..3}; do
-#    time ./bin/main_cpu "$CURRENT_DIR/config.h5" "$CURRENT_DIR/cpu_output.h5" >> $CURRENT_DIR/cpu_performance.txt
-# done
+> $CURRENT_DIR/cpu_performance.txt
+for i in {0..3}; do
+   time ./bin/main_cpu "$CURRENT_DIR/config.h5" "$CURRENT_DIR/cpu_output.h5" >> $CURRENT_DIR/cpu_performance.txt
+done
 
 > $CURRENT_DIR/gpu_performance.txt
 for i in {0..3}; do
