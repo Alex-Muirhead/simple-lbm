@@ -24,9 +24,9 @@ def switchdir(dir, make=False):
 if __name__ == '__main__':
 
     BASE_DIR = 'examples/taylor_green/'
-    magnitude = 0.2
+    magnitude = 0.1
 
-    # Loop from 32 to 4096
+    # Loop from 32 to 1024
     for resolution in np.logspace(5, 12, 8, base=2, dtype=int):
 
         x = np.linspace(0, 2*np.pi, resolution)
@@ -44,16 +44,18 @@ if __name__ == '__main__':
             'density': r
         }
 
+        timesteps = 100*int(4096/resolution)**2
+
         meta = {
             'size_x': x.size,
             'size_y': y.size,
-            'timesteps': 1000,
-            'savestep': 1000
+            'timesteps': timesteps,
+            'savestep': -1  # int(timesteps/100)
         }
 
-        folder = f'{resolution}x{resolution}/'
-        with switchdir(BASE_DIR+folder):
-            with h5py.File('taylor_green.h5', 'w') as file:
+        folder = f'{resolution:0>4}x{resolution:0>4}/'
+        with switchdir(BASE_DIR+folder, make=True):
+            with h5py.File('config.h5', 'w') as file:
                 group = file.create_group('initial')
                 for name, data in initial.items():
                     dataset = group.create_dataset(name, data.shape, dtype='f')
