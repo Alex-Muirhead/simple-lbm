@@ -11,12 +11,13 @@ your local machine for development and testing purposes.
 
 ### Prerequisites
 
-- HDF5 Library. *Note: On the UQ `goliath` and `getafix` clusters, this
+- HDF5 Library. *Note: On the UQ `getafix` clusters, this
    library can be loaded in with*
 ```bash
 module load hdf5-serial
 module load cuda
 ```
+**NOTE:** The UQ `goliath` cluster does _not_ have the `hdf5-serial` library!
 
 ### Building
 
@@ -28,14 +29,20 @@ it must be manually included in the [makefile](./Makefile).
 HDF5HOME ?= /home/alex/hdf5
 ```
 
-Once the library is specified, the code can be built with `make cpu` or `make gpu`.
+Once the library is specified, the code can be built with make `cpu` or `gpu`
+targets.
 
 ### Example
 
+Example input files can be build with the [`pre.py`](./tools/pre.py) script,
+which requires the `anaconda3` module to be loaded. These example files will
+contain the Taylor Green vortex initial conditions for a range of domain sizes,
+and a roughly constant compute time.
+
 Once built, the file can be called with
 ```bash
-./bin/main "taylor_green.h5"
-./bin/main_gpu "taylor_green.h5"
+./bin/main_cpu ./examples/taylor_green/0032x0032/config.h5
+./bin/main_gpu ./examples/taylor_green/0032x0032/config.h5
 ```
 
 ## Authors
