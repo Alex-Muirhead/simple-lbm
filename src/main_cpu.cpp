@@ -16,12 +16,12 @@ enum PointType : int {
     Slip_H = 1 << 3,  // Horiztonal bounce-forward boundary
 };
 
-static unsigned int size_x;
-static unsigned int size_y;
+static size_t size_x;
+static size_t size_y;
 
 void init_eq(double* f, int* phase, double* rho, double* vel_x, double* vel_y) {
-    for (unsigned int y = 0; y < size_y; y++) {
-        for (unsigned int x = 0; x < size_x; x++) {
+    for (size_t y = 0; y < size_y; y++) {
+        for (size_t x = 0; x < size_x; x++) {
             if (phase[Scalar::index(x, y)] != PointType::Fluid) {
                 // Set boundary lattice at zero
                 for (int q = 0; q < Q; q++) {
@@ -47,15 +47,15 @@ void init_eq(double* f, int* phase, double* rho, double* vel_x, double* vel_y) {
 
 void collide(double* f, double omega) {
     // Loop over the lattice dimensions
-    for (unsigned int y = 0; y < size_y; y++) {
-        for (unsigned int x = 0; x < size_x; x++) {
+    for (size_t y = 0; y < size_y; y++) {
+        for (size_t x = 0; x < size_x; x++) {
             // -- Calculate macroscopic properties --
 
             double r = 0.0;  // Density
             double u = 0.0;  // Velocity x
             double v = 0.0;  // Velocity y
 
-            for (int q = 0; q < Q; q++) {
+            for (unsigned int q = 0; q < Q; q++) {
                 double dist = f[Field::index(x, y, q)];
 
                 r += dist;            // 0th order moment
@@ -70,7 +70,7 @@ void collide(double* f, double omega) {
             double vel_sqr = u * u + v * v;
 
             // Can unroll loop if necessary
-            for (int q = 0; q < Q; q++) {
+            for (unsigned int q = 0; q < Q; q++) {
                 double vel_dot = u * c[q][0] + v * c[q][1];
                 double feq = weights[q] * r * (1. + 3.0 * vel_dot - 1.5 * vel_sqr + 4.5 * vel_dot * vel_dot);
                 f[Field::index(x, y, q)] = (1 - omega) * f[Field::index(x, y, q)] + omega * feq;
@@ -80,8 +80,8 @@ void collide(double* f, double omega) {
 }
 
 void stream(double* f_src, double* f_dst, int* phase) {
-    for (unsigned int y = 0; y < size_y; y++) {
-        for (unsigned int x = 0; x < size_x; x++) {
+    for (size_t y = 0; y < size_y; y++) {
+        for (size_t x = 0; x < size_x; x++) {
             // Boundary types do not have distributions
             if (phase[Scalar::index(x, y)] != PointType::Fluid)
                 continue;
@@ -89,10 +89,10 @@ void stream(double* f_src, double* f_dst, int* phase) {
             // Standard streaming w/ periodic boundary
             for (unsigned int q = 0; q < Q; q++) {
                 // Wrap coordinates over domain
-                unsigned int xn = int(size_x + x + c[q][0]) % size_x;
-                unsigned int yn = int(size_y + y + c[q][1]) % size_y;
+                size_t xn = int(size_x + x + c[q][0]) % size_x;
+                size_t yn = int(size_y + y + c[q][1]) % size_y;
 
-                unsigned int next_index;
+                size_t next_index;
 
                 switch (phase[Scalar::index(xn, yn)]) {
                     case PointType::NoSlip: {
@@ -120,8 +120,8 @@ void stream(double* f_src, double* f_dst, int* phase) {
 }
 
 void calculate_flow_properties(double* f, double* rho, double* vel_x, double* vel_y) {
-    for (unsigned int y = 0; y < size_y; y++) {
-        for (unsigned int x = 0; x < size_x; x++) {
+    for (size_t y = 0; y < size_y; y++) {
+        for (size_t x = 0; x < size_x; x++) {
             // -- Calculate macroscopic properties --
 
             double r = 0.0;  // Density
@@ -147,15 +147,24 @@ void calculate_flow_properties(double* f, double* rho, double* vel_x, double* ve
 }
 
 int main(int argc, char* argv[]) {
+    const char *input_name, *output_name;
+
     if (argc < 2) {
-        cerr << "Expected filename" << endl;
+        cerr << "Expected filenames" << endl;
         return -1;
+    } else if (argc < 3) {
+        cout << "Using 'output.h5' as output file" << endl;
+        output_name = "output.h5";
+    } else {
+        output_name = argv[2];
     }
 
-    double nu_lb = 0.092;                     // Lattice dynamic viscosity
-    double omega = 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
+    input_name = argv[1];
 
-    InputData config = InputData::open(argv[1]);
+    double nu_lb = 0.092;                     // Lattice dynamic viscosity
+    double omega = 1.0; // 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
+
+    InputData config = InputData::open(input_name);
 
     Field::set_field_shape(config.shape_x, config.shape_y, Q);
     Scalar::set_scalar_shape(config.shape_x, config.shape_y);
@@ -182,7 +191,7 @@ int main(int argc, char* argv[]) {
     init_eq(f1, type_lattice, rho, vel_x, vel_y);
 
     OutputData output;
-    output = OutputData::create("output.h5");
+    output = OutputData::create(output_name);
 
     auto saveTime = chrono::microseconds::zero();
     auto startSave = chrono::high_resolution_clock::now();
@@ -194,7 +203,7 @@ int main(int argc, char* argv[]) {
 
     auto start = chrono::high_resolution_clock::now();
 
-    for (unsigned int t = 0; t < config.timesteps; t++) {
+    for (size_t t = 0; t < config.timesteps; t++) {
         // Collision step
         collide(f1, omega);
 
@@ -203,7 +212,7 @@ int main(int argc, char* argv[]) {
 
         // Decide when to save / export the data
         if ((config.savestep > 0) && ((t + 1) % config.savestep == 0)) {
-            printf("Saving data from timestep %d\n", t + 1);
+            printf("Saving data from timestep %zd\n", t + 1);
             calculate_flow_properties(f2, rho, vel_x, vel_y);
             auto startSave = chrono::high_resolution_clock::now();
             output.append_scalar("density", rho);
@@ -223,7 +232,8 @@ int main(int argc, char* argv[]) {
     double runtime = chrono::duration_cast<chrono::milliseconds> (end - start).count() / 1000.0;
 
     size_t nodes_updated = config.timesteps * size_t(size_x * size_y);
-    size_t nodes_saved   = config.timesteps / config.savestep * size_t(size_x * size_y);
+    size_t save_iters = (config.savestep > 0) ? config.timesteps / config.savestep : 0;
+    size_t nodes_saved = save_iters * size_t(size_x * size_y);
     // calculate speed in million lattice updates per second
     double speed = nodes_updated / (1E+06 * runtime);
     // calculate memory access rate in GiB/s
@@ -238,7 +248,7 @@ int main(int argc, char* argv[]) {
     printf("    clock runtime: %.3f (s)\n", runtime);
     printf("      output time: %.3f (ms)\n", saveTime.count() / 1000.0);
     printf("            speed: %.2f (Mlups)\n", speed);
-    printf("        bandwidth: %.1f (GiB/s)\n", bandwidth);
+    printf("        bandwidth: %.2f (GiB/s)\n", bandwidth);
 
     // Close resources
 

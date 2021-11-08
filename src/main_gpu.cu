@@ -58,33 +58,33 @@ enum PointType : int {
     Slip_H = 1 << 3,  // Horiztonal bounce-forward boundary
 };
 
-__device__ static unsigned int gpu_size_x;
-__device__ static unsigned int gpu_size_y;
+__device__ static size_t gpu_size_x;
+__device__ static size_t gpu_size_y;
 
-static unsigned int size_x;
-static unsigned int size_y;
-static unsigned int nThreads = 16;
+static size_t size_x;
+static size_t size_y;
+static size_t nThreads = 16;
 
 __device__ __forceinline__
-size_t scalar_index(int x, int y) {
+size_t scalar_index(size_t x, size_t y) {
     return gpu_size_x * y + x;
 }
 
 __device__ __forceinline__
-size_t field_index(int x, int y, int q) {
+size_t field_index(size_t x, size_t y, size_t q) {
     return Q * (gpu_size_x * y + x) + q;
 }
 
 __global__
-void set_gpu_size(int size_x, int size_y) {
+void set_gpu_size(size_t size_x, size_t size_y) {
     gpu_size_x = size_x;
     gpu_size_y = size_y;
 }
 
 __global__
 void init_kernel(double* f, double* rho, double* vel_x, double* vel_y) {
-    unsigned int y = blockIdx.y;
-    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t y = blockIdx.y;
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if ((x >= gpu_size_x) || (y >= gpu_size_y)) {
         // Exit kernel if out of bounds
@@ -107,8 +107,8 @@ void init_kernel(double* f, double* rho, double* vel_x, double* vel_y) {
 
 __global__
 void collide_kernel(double* f, double omega) {
-    unsigned int y = blockIdx.y;
-    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t y = blockIdx.y;
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if ((x >= gpu_size_x) || (y >= gpu_size_y)) {
         // Exit kernel if out of bounds
@@ -145,8 +145,8 @@ void collide_kernel(double* f, double omega) {
 
 __global__
 void stream_kernel(double* f_src, double* f_dst) {
-    unsigned int y = blockIdx.y;
-    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t y = blockIdx.y;
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if ((x >= gpu_size_x) || (y >= gpu_size_y)) {
         // Exit kernel if out of bounds
@@ -154,10 +154,10 @@ void stream_kernel(double* f_src, double* f_dst) {
     }
 
     // Standard streaming w/ periodic boundary
-    for (unsigned int q = 0; q < Q; q++) {
+    for (size_t q = 0; q < Q; q++) {
         // Wrap coordinates over domain
-        unsigned int xn = int(gpu_size_x + x + c[q][0]) % gpu_size_x;
-        unsigned int yn = int(gpu_size_y + y + c[q][1]) % gpu_size_y;
+        size_t xn = size_t(gpu_size_x + x + c[q][0]) % gpu_size_x;
+        size_t yn = size_t(gpu_size_y + y + c[q][1]) % gpu_size_y;
 
         f_dst[field_index(xn, yn, q)] = f_src[field_index(x, y, q)];
     }
@@ -165,8 +165,8 @@ void stream_kernel(double* f_src, double* f_dst) {
 
 __global__
 void properties_kernel(double* f, double* rho, double* vel_x, double* vel_y) {
-    unsigned int y = blockIdx.y;
-    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t y = blockIdx.y;
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if ((x >= gpu_size_x) || (y >= gpu_size_y)) {
         // Exit kernel if out of bounds
@@ -179,7 +179,7 @@ void properties_kernel(double* f, double* rho, double* vel_x, double* vel_y) {
     double u = 0.0;  // Velocity x
     double v = 0.0;  // Velocity y
 
-    for (int q = 0; q < Q; q++) {
+    for (size_t q = 0; q < Q; q++) {
         double dist = f[field_index(x, y, q)];
 
         r += dist;            // 0th order moment
@@ -252,17 +252,26 @@ void DisplayHeader()
 }
 
 int main(int argc, char* argv[]) {
+    const char *input_name, *output_name;
+
     if (argc < 2) {
-        cerr << "Expected filename" << endl;
+        cerr << "Expected filenames" << endl;
         return -1;
+    } else if (argc < 3) {
+        cout << "Using 'output.h5' as output file" << endl;
+        output_name = "output.h5";
+    } else {
+        output_name = argv[2];
     }
+
+    input_name = argv[1];
 
     DisplayHeader();
 
     double nu_lb = 0.092;                     // Lattice dynamic viscosity
-    double omega = 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
+    double omega = 1.0; // 1.0 / (3. * nu_lb + 0.5);  // Relaxation parameter
 
-    InputData config = InputData::open(argv[1]);
+    InputData config = InputData::open(input_name);
 
     Field::set_field_shape(config.shape_x, config.shape_y, Q);
     Scalar::set_scalar_shape(config.shape_x, config.shape_y);
@@ -312,20 +321,20 @@ int main(int argc, char* argv[]) {
     init_eq(f1_gpu, rho_gpu, vel_x_gpu, vel_y_gpu);
 
     OutputData output;
-    output = OutputData::create("output.h5");
+    output = OutputData::create(output_name);
 
     auto saveTime = chrono::microseconds::zero();
-    auto startSave = chrono::high_resolution_clock::now();
+    // auto startSave = chrono::high_resolution_clock::now();
     output.write_scalar("density", rho);
     output.write_scalar("vel_x", vel_x);
     output.write_scalar("vel_y", vel_y);
-    auto endSave = chrono::high_resolution_clock::now();
-    saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
+    // auto endSave = chrono::high_resolution_clock::now();
+    // saveTime += chrono::duration_cast<chrono::microseconds>(endSave - startSave);
 
     auto start = chrono::high_resolution_clock::now();
     checkError(cudaEventRecord(begin, 0));
 
-    for (int t = 0; t < config.timesteps; t++) {
+    for (size_t t = 0; t < config.timesteps; t++) {
         // Collision step
         collide(f1_gpu, omega);
 
@@ -334,7 +343,7 @@ int main(int argc, char* argv[]) {
 
         // Decide when to save / export the data
         if ((config.savestep > 0) && ((t + 1) % config.savestep == 0)) {
-            printf("Saving data from timestep %d\n", t + 1);
+            printf("Saving data from timestep %zd\n", t + 1);
             calculate_flow_properties(f2_gpu, rho_gpu, vel_x_gpu, vel_y_gpu);
             auto startSave = chrono::high_resolution_clock::now();
             checkError(cudaMemcpy(  rho,   rho_gpu, Scalar::size*sizeof(double), cudaMemcpyDeviceToHost));
@@ -363,7 +372,8 @@ int main(int argc, char* argv[]) {
     double gpu_runtime = 0.001*gpu_milliseconds;
 
     size_t nodes_updated = config.timesteps * size_t(size_x * size_y);
-    size_t nodes_saved   = config.timesteps / config.savestep * size_t(size_x * size_y);
+    size_t save_iters    = (config.savestep > 0) ? config.timesteps / config.savestep : 0;
+    size_t nodes_saved   = save_iters * size_t(size_x * size_y);
 
     // calculate speed in million lattice updates per second
     double speed = nodes_updated / (1E+06 * runtime);
@@ -371,7 +381,7 @@ int main(int argc, char* argv[]) {
     double bytesPerGiB = 1024.0 * 1024.0 * 1024.0;
     double bandwidth = (
         nodes_updated * Q * 2
-        + nodes_saved * 3
+        + nodes_saved *  3
     ) * sizeof(double) / (runtime * bytesPerGiB);
 
     printf(" ----- performance information -----\n");
