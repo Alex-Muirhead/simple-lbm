@@ -171,8 +171,8 @@ void OutputData::write_scalar(const char *dataname, double *data) {
     hid_t status, dataset, dataspace;
 
     // Temporary values
-    unsigned int size_x = 128;
-    unsigned int size_y = 128;
+    unsigned int size_x = size_t(Scalar::shape_x);
+    unsigned int size_y = size_t(Scalar::shape_y);
 
     int rank = 3;
     hsize_t dims[3] = {0, size_x, size_y};
@@ -214,8 +214,8 @@ void OutputData::append_scalar(const char *dataname, double *data) {
     hsize_t memdims[2], dims[3], maxdims[3], offset[3], count[3];
 
     // Temporary values
-    unsigned int size_x = 128;
-    unsigned int size_y = 128;
+    unsigned int size_x = size_t(Scalar::shape_x);
+    unsigned int size_y = size_t(Scalar::shape_y);
 
     // Get the relevant dataset
     dataset = datasets.at(dataname);
